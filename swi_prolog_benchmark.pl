@@ -2,6 +2,8 @@
 :- use_module(library(readutil)).
 :- use_module(library(lists)).
 
+:- discontiguous main/0.
+
 read_lines(File, Lines) :-
     read_file_to_string(File, Text, []),
     split_string(Text, "\n", "\r", RawLines),
@@ -33,12 +35,11 @@ read_instance(File, Vertices, Rects) :-
     sort(AllVertices, Vertices).
 
 vertex_vars([], [], []).
-vertex_vars([V|Vs], [X|Xs], [V-X|Pairs]) :-
+vertex_vars([V|Vs], [X|Xs], [V-X|_Pairs]) :-
     X in 0..1,
-    vertex_vars(Vs, Xs, Pairs).
+    vertex_vars(Vs, Xs, _Pairs).
 
 rect_constraint(Rect, Vertices, VarsAll) :-
-    format('RC: Rect=~w~n', [Rect]),
     findall(Var, (
         member(V, Rect),
         nth1(I, Vertices, V),
@@ -51,16 +52,11 @@ solve_instance(File, Guards, TimeMs) :-
     read_instance(File, Vertices, Rects),
     vertex_vars(Vertices, Vars, Pairs),
     length(Vertices, NV), length(Rects, NR), length(Vars, NVars),
-    format('DBG: NV=~d NR=~d NVars=~d~n', [NV, NR, NVars]),
-    nth1(1, Rects, FirstRect),
-    findall(I, (member(V, FirstRect), nth1(I, Vertices, V)), Idxs1),
-    format('DBG: FirstRectIdxs=~w~n', [Idxs1]),
+    nth1(1, Rects, _FirstRect),
     maplist({Vertices,Vars}/[R]>>rect_constraint(R, Vertices, Vars), Rects),
     sum(Vars, #=, Cost),
-    (   catch(fd_dom(Cost, DCost), _, fail)
-    ->  format('DBG: CostDom=~w~n', [DCost]) ; true ),
-    (   Vars = [V1|_], catch(fd_dom(V1, D1), _, fail)
-    ->  format('DBG: Var1Dom=~w~n', [D1]) ; true ),
+    (   catch(fd_dom(Cost, _DCost), _, fail) ; true ),
+    (   Vars = [_V1|_], catch(fd_dom(_V1, _D1), _, fail) ; true ),
     statistics(walltime, [T0,_]),
     labeling([min(Cost)], Vars),
     statistics(walltime, [T1,_]),
@@ -84,7 +80,6 @@ update_best(CurrSel) :-
     length(CurrSel, L),
     (   nb_getval(best_size, Best), L < Best
     ->  nb_setval(best_size, L), nb_setval(best_sel, CurrSel)
-    , format('UPDATE_BEST: size=~d sel=~w~n', [L, CurrSel])
     ;   true).
 
 search_bb([], CurrSel) :- !, update_best(CurrSel).
@@ -105,7 +100,7 @@ solve_instance_bb(File, Guards, TimeMs) :-
     statistics(walltime, [T1,_]),
     TimeMs is T1 - T0,
     nb_getval(best_sel, Sel), reverse(Sel, Guards),
-    nb_getval(best_size, Best), format('BB: best_size=~w best_sel=~w~n', [Best, Sel]).
+    nb_getval(best_size, _Best).
 
 % --- Exact iterative-deepening search using vertex frequencies ---
 
@@ -142,7 +137,6 @@ find_min_cover(Vertices, Rects, Sel, K) :-
     length(Rects, NR),
     LB is max(1, (NR // 1)),
     MaxK is GreedyK,
-    format('GREEDY upper bound=~d~n', [GreedyK]),
     between(LB, MaxK, K),
     search_k(K, Rects, SortedVerts, Sel), !.
 
@@ -150,7 +144,6 @@ find_min_cover_with_ub(Vertices, Rects, UB, Sel, K) :-
     vertex_freqs(Vertices, Rects, VCounts),
     sort_vertices_by_freq(VCounts, SortedVerts),
     greedy_cover(SortedVerts, Rects, GreedySel), length(GreedySel, GreedyK),
-    format('GREEDY upper bound=~d (user UB=~d)~n', [GreedyK, UB]),
     LB = 1,
     MaxK is min(UB, GreedyK),
     between(LB, MaxK, K),
@@ -173,14 +166,25 @@ solve_instance_exact(File, Guards, TimeMs) :-
     ),
     statistics(walltime, [T1,_]),
     TimeMs is T1 - T0,
-    Guards = Sel,
-    format('EXACT: K=~w Sel=~w~n', [K, Sel]).
+    Guards = Sel.
+
+% Verify existence of a solution with exactly UB guards using CLP(FD).
+solve_instance_verify(File, UB, Guards, TimeMs) :-
+    read_instance(File, Vertices, Rects),
+    vertex_vars(Vertices, Vars, _Pairs),
+    maplist({Vertices,Vars}/[R]>>rect_constraint(R, Vertices, Vars), Rects),
+    sum(Vars, #=, UB),
+    statistics(walltime, [T0,_]),
+    (   labeling([ff], Vars) -> true ; true ),
+    statistics(walltime, [T1,_]),
+    TimeMs is T1 - T0,
+    findall(V, (nth1(I, Vertices, V), nth1(I, Vars, Var), Var == 1), Guards).
 
 % Override benchmark to use procedural solver when clpfd didn't find guards
 benchmark_file(File) :-
-    (   solve_instance(File, Guards, TimeMs), length(Guards, Count), Count > 0
-    ->  true
-    ;   solve_instance_bb(File, Guards, TimeMs)
+    (   instance_ub(File, UB)
+    ->  ( solve_instance_verify(File, UB, Guards, TimeMs) -> true ; solve_instance_bb(File, Guards, TimeMs) )
+    ;   ( solve_instance(File, Guards, TimeMs), length(Guards, Count), Count > 0 -> true ; solve_instance_bb(File, Guards, TimeMs) )
     ),
     length(Guards, Count), TimeSec is TimeMs/1000,
     format('~w & ~d & ~3f\\~n', [File, Count, TimeSec]).
