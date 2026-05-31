@@ -4,6 +4,19 @@
 
 :- discontiguous main/0.
 
+script_dir(Dir) :-
+    source_file(main, File),
+    file_directory_name(File, Dir).
+
+repo_root(Root) :-
+    script_dir(Dir),
+    file_directory_name(Dir, Root).
+
+benchmark_file_path(Name, Path) :-
+    repo_root(Root),
+    directory_file_path(Root, 'PartsRectangulares/Exemplos', BaseDir),
+    directory_file_path(BaseDir, Name, Path).
+
 read_lines(File, Lines) :-
     read_file_to_string(File, Text, []),
     split_string(Text, "\n", "\r", RawLines),
@@ -191,10 +204,15 @@ benchmark_file(File) :-
 
 
 main :-
-    benchmark_file('CC3003/PartsRectangulares/Exemplos/parts40'),
-    benchmark_file('CC3003/PartsRectangulares/Exemplos/step50'),
+    benchmark_file_path(parts40, Parts40),
+    benchmark_file_path(step50, Step50),
+    benchmark_file(Parts40),
+    benchmark_file(Step50),
     true.
 
 
-instance_ub('CC3003/PartsRectangulares/Exemplos/parts40', 14).
-instance_ub('CC3003/PartsRectangulares/Exemplos/step50', 17).
+instance_ub(File, 14) :-
+    benchmark_file_path(parts40, File).
+
+instance_ub(File, 17) :-
+    benchmark_file_path(step50, File).
