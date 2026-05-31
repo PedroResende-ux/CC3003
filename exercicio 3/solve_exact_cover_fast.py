@@ -1,6 +1,14 @@
 import time
 from functools import lru_cache
 from pathlib import Path
+import sys
+
+
+repo_root = Path(__file__).resolve().parent.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+from parser import parser
 
 
 def solve_exact_cover_fast(instance):
