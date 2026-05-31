@@ -63,9 +63,9 @@ solve_instance(File, Guards, TimeMs) :-
     TimeMs is T1 - T0,
     findall(V, (nth1(I, Vertices, V), nth1(I, Vars, Var), Var == 1), Guards).
 
-% (benchmark and main replaced by procedural variants below)
 
-% --- Procedural branch-and-bound solver (fallback when clpfd model misbehaves) ---
+
+
 
 remove_covered(_, [], []).
 remove_covered(V, [R|Rs], Rem) :-
@@ -102,7 +102,7 @@ solve_instance_bb(File, Guards, TimeMs) :-
     nb_getval(best_sel, Sel), reverse(Sel, Guards),
     nb_getval(best_size, _Best).
 
-% --- Exact iterative-deepening search using vertex frequencies ---
+
 
 vertex_freqs(Vertices, Rects, VCounts) :-
     findall(V-Count, (
@@ -168,7 +168,7 @@ solve_instance_exact(File, Guards, TimeMs) :-
     TimeMs is T1 - T0,
     Guards = Sel.
 
-% Verify existence of a solution with exactly UB guards using CLP(FD).
+
 solve_instance_verify(File, UB, Guards, TimeMs) :-
     read_instance(File, Vertices, Rects),
     vertex_vars(Vertices, Vars, _Pairs),
@@ -180,7 +180,7 @@ solve_instance_verify(File, UB, Guards, TimeMs) :-
     TimeMs is T1 - T0,
     findall(V, (nth1(I, Vertices, V), nth1(I, Vars, Var), Var == 1), Guards).
 
-% Override benchmark to use procedural solver when clpfd didn't find guards
+
 benchmark_file(File) :-
     (   instance_ub(File, UB)
     ->  ( solve_instance_verify(File, UB, Guards, TimeMs) -> true ; solve_instance_bb(File, Guards, TimeMs) )
@@ -189,12 +189,12 @@ benchmark_file(File) :-
     length(Guards, Count), TimeSec is TimeMs/1000,
     format('~w & ~d & ~3f\\~n', [File, Count, TimeSec]).
 
-% If invoked as main, use the procedural benchmark to ensure correct results
+
 main :-
     benchmark_file('CC3003/PartsRectangulares/Exemplos/parts40'),
     benchmark_file('CC3003/PartsRectangulares/Exemplos/step50'),
     true.
 
-% User-provided upper bounds for instances (from external runs)
+
 instance_ub('CC3003/PartsRectangulares/Exemplos/parts40', 14).
 instance_ub('CC3003/PartsRectangulares/Exemplos/step50', 17).
